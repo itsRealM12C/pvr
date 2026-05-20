@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVR Extractor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e0f;
+    --surface: #161618;
+    --surface2: #1e1e21;
+    --border: #2a2a2e;
+    --accent: #4af0a4;
+    --accent-dim2: rgba(74,240,164,0.06);
+    --text: #e8e8ea;
+    --muted: #666;
+    --muted2: #444;
+    --danger: #f05a5a;
+    --warn: #f0a44a;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1.5rem 5rem;
+  }
+
+  header {
+    width: 100%; max-width: 720px;
+    margin-bottom: 3rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    display: flex; align-items: baseline; gap: 1rem;
+  }
+  header h1 { font-family: var(--mono); font-size: 1.1rem; font-weight: 600; color: var(--accent); }
+  header span { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+
+  .main { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .drop-zone {
+    border: 1px dashed var(--border); border-radius: 4px;
+    padding: 3.5rem 2rem; text-align: center; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: var(--surface);
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: var(--accent-dim2); }
+  .drop-zone input { display: none; }
+  .drop-zone .icon { font-family: var(--mono); font-size: 2rem; color: var(--muted2); margin-bottom: 1rem; display: block; }
+  .drop-zone p { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); line-height: 1.8; }
+  .drop-zone p strong { color: var(--text); font-weight: 500; }
+
+  .log-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1rem 1.25rem; display: none; max-height: 240px; overflow-y: auto; }
+  .log-panel.visible { display: block; }
+  .log-line { font-family: var(--mono); font-size: 0.75rem; line-height: 2; color: var(--muted); display: flex; gap: 1rem; }
+  .log-line .ts { color: var(--muted2); min-width: 60px; }
+  .log-line.ok .msg { color: var(--accent); }
+  .log-line.err .msg { color: var(--danger); }
+  .log-line.warn .msg { color: var(--warn); }
+  .log-line.info .msg { color: var(--text); }
+
+  .progress-wrap { height: 2px; background: var(--surface2); border-radius: 1px; overflow: hidden; margin-top: 0.75rem; display: none; }
+  .progress-wrap.visible { display: block; }
+  .progress-bar { height: 100%; width: 0%; background: var(--accent); transition: width 0.08s linear; }
+
+  .meta-grid { display: none; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .meta-grid.visible { display: grid; }
+  .meta-cell { background: var(--surface); padding: 0.875rem 1rem; }
+  .meta-cell .label { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.35rem; }
+  .meta-cell .val { font-family: var(--mono); font-size: 0.9rem; font-weight: 500; color: var(--text); }
+
+  .preview-wrap { display: none; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; background: repeating-conic-gradient(#222 0% 25%, #1a1a1a 0% 50%) 0 0 / 20px 20px; }
+  .preview-wrap.visible { display: block; }
+  .preview-wrap img { width: 100%; display: block; max-height: 420px; object-fit: contain; }
+
+  .export-bar { display: none; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+  .export-bar.visible { display: flex; }
+  .export-bar label { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+
+  select, input[type=range] {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 0.75rem;
+    padding: 0.45rem 0.75rem; border-radius: 3px; outline: none; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+  }
+  select:focus { border-color: var(--accent); }
+  input[type=range] { padding: 0; width: 90px; accent-color: var(--accent); height: 4px; }
+
+  .btn {
+    font-family: var(--mono); font-size: 0.78rem; font-weight: 500;
+    padding: 0.5rem 1.25rem; border-radius: 3px;
+    border: 1px solid var(--accent); background: transparent; color: var(--accent);
+    cursor: pointer; transition: background 0.12s, color 0.12s;
+  }
+  .btn:hover { background: var(--accent); color: #000; }
+  .btn:disabled { border-color: var(--muted2); color: var(--muted2); cursor: not-allowed; }
+  .btn:disabled:hover { background: transparent; color: var(--muted2); }
+
+  .spacer { flex: 1; }
+  .qval { font-family: var(--mono); font-size: 0.75rem; color: var(--text); min-width: 28px; }
+
+  .support-note { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); line-height: 1.8; padding: 0.875rem 1.25rem; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+  .support-note span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>pvr-extractor</h1>
+  <span>ETC1 / ETC2 · client-side · no upload</span>
+</header>
+
+<div class="main">
+
+  <div class="drop-zone" id="drop-zone"
+    ondragover="dzOver(event)" ondragleave="dzLeave()" ondrop="dzDrop(event)"
+    onclick="document.getElementById('file-input').click()">
+    <input type="file" id="file-input" accept=".pvr" onchange="handleFile(this.files[0])">
+    <span class="icon">[ + ]</span>
+    <p><strong>drop .pvr file here</strong><br>or click to browse</p>
+  </div>
+
+  <div class="log-panel" id="log-panel"></div>
+  <div class="progress-wrap" id="progress-wrap"><div class="progress-bar" id="progress-bar"></div></div>
+
+  <div class="meta-grid" id="meta-grid">
+    <div class="meta-cell"><div class="label">width</div><div class="val" id="m-w">—</div></div>
+    <div class="meta-cell"><div class="label">height</div><div class="val" id="m-h">—</div></div>
+    <div class="meta-cell"><div class="label">format</div><div class="val" id="m-fmt">—</div></div>
+    <div class="meta-cell"><div class="label">file size</div><div class="val" id="m-size">—</div></div>
+  </div>
+
+  <div class="preview-wrap" id="preview-wrap">
+    <img id="preview-img" alt="decoded texture preview">
+  </div>
+
+  <div class="export-bar" id="export-bar">
+    <label>format</label>
+    <select id="fmt-sel" onchange="fmtChanged()">
+      <option value="png">PNG</option>
+      <option value="jpg">JPG</option>
+    </select>
+    <label id="ql-lbl" style="display:none">quality</label>
+    <input type="range" id="q-slider" min="60" max="100" step="1" value="92" style="display:none" oninput="document.getElementById('q-val').textContent=this.value+'%'">
+    <span class="qval" id="q-val" style="display:none">92%</span>
+    <div class="spacer"></div>
+    <button class="btn" onclick="saveImage()">↓ download</button>
+  </div>
+
+  <div class="support-note">
+    supported: <span>ETC1</span> (fmt 6) · <span>ETC2 RGB</span> (fmt 22) · <span>ETC2 RGBA</span> (fmt 23)<br>
+    pvr3 magic: 0x03525650 · all decoding runs locally in your browser
+  </div>
+
+</div>
+
+<script>
+function dzOver(e){ e.preventDefault(); document.getElementById('drop-zone').classList.add('drag-over'); }
+function dzLeave(){ document.getElementById('drop-zone').classList.remove('drag-over'); }
+function dzDrop(e){ e.preventDefault(); dzLeave(); const f=e.dataTransfer.files[0]; if(f) handleFile(f); }
+
+let logPanel;
+function initLog(){
+  logPanel = document.getElementById('log-panel');
+  logPanel.innerHTML='';
+  logPanel.classList.add('visible');
+}
+function log(msg, type='info'){
+  const ts = new Date().toTimeString().slice(0,8);
+  const line = document.createElement('div');
+  line.className = 'log-line '+type;
+  line.innerHTML = `<span class="ts">${ts}</span><span class="msg">${msg}</span>`;
+  logPanel.appendChild(line);
+  logPanel.scrollTop = logPanel.scrollHeight;
+}
+
+function setProgress(pct){
+  document.getElementById('progress-wrap').classList.add('visible');
+  document.getElementById('progress-bar').style.width = pct+'%';
+}
+
+// yield to the browser so it can repaint
+function tick(){ return new Promise(r => setTimeout(r, 0)); }
+
+const MOD = [
+  [2,8,-2,-8],[5,17,-5,-17],[9,29,-9,-29],[13,42,-13,-42],
+  [18,60,-18,-60],[24,80,-24,-80],[33,106,-33,-106],[47,183,-47,-183]
+];
+function clamp(v){ return v<0?0:v>255?255:v; }
+
+function decodeETC1Block(bytes, byteOff, px, bx, by, W, H){
+  // read big-endian u32 pair manually (avoids alignment issues)
+  const w0 = (bytes[byteOff]<<24|bytes[byteOff+1]<<16|bytes[byteOff+2]<<8|bytes[byteOff+3])>>>0;
+  const w1 = (bytes[byteOff+4]<<24|bytes[byteOff+5]<<16|bytes[byteOff+6]<<8|bytes[byteOff+7])>>>0;
+
+  const diff=(w0>>1)&1, flip=w0&1;
+  let r1,g1,b1,r2,g2,b2;
+  if(diff){
+    let ri=(w0>>27)&31, dr=(w0>>24)&7; if(dr>=4)dr-=8;
+    let gi=(w0>>19)&31, dg=(w0>>16)&7; if(dg>=4)dg-=8;
+    let bi=(w0>>11)&31, db=(w0>>8) &7; if(db>=4)db-=8;
+    r1=(ri<<3)|(ri>>2); r2=clamp(((ri+dr)<<3)|((ri+dr)&31)>>2);
+    g1=(gi<<3)|(gi>>2); g2=clamp(((gi+dg)<<3)|((gi+dg)&31)>>2);
+    b1=(bi<<3)|(bi>>2); b2=clamp(((bi+db)<<3)|((bi+db)&31)>>2);
+  } else {
+    r1=(w0>>28)&15; r1=(r1<<4)|r1; r2=(w0>>24)&15; r2=(r2<<4)|r2;
+    g1=(w0>>20)&15; g1=(g1<<4)|g1; g2=(w0>>16)&15; g2=(g2<<4)|g2;
+    b1=(w0>>12)&15; b1=(b1<<4)|b1; b2=(w0>>8) &15; b2=(b2<<4)|b2;
+  }
+  const t1=(w0>>5)&7, t2=(w0>>2)&7;
+  for(let i=0;i<16;i++){
+    const col=i>>2, row=i&3;
+    const sub = flip ? (row<2?0:1) : (col<2?0:1);
+    const br=sub?r2:r1, bg=sub?g2:g1, bb=sub?b2:b1, tbl=sub?t2:t1;
+    const bit=col*4+row;
+    const mod=MOD[tbl][((w1>>(bit+16))&1)<<1|((w1>>bit)&1)];
+    const ox=bx*4+col, oy=by*4+row;
+    if(ox<W && oy<H){
+      const idx=(oy*W+ox)*4;
+      px[idx]=clamp(br+mod); px[idx+1]=clamp(bg+mod); px[idx+2]=clamp(bb+mod); px[idx+3]=255;
+    }
+  }
+}
+
+const AT=[[-3,-6,-9,-15,2,5,8,14],[-3,-7,-10,-13,2,6,9,12],[-2,-5,-8,-13,1,4,7,12],[-2,-4,-6,-13,1,3,5,12],[-3,-6,-8,-12,2,5,7,11],[-3,-6,-7,-11,2,5,6,10],[-4,-7,-8,-11,3,6,7,10],[-3,-5,-8,-11,2,4,7,10],[-2,-6,-8,-10,1,5,7,9],[-2,-5,-8,-10,1,4,7,9],[-2,-4,-8,-10,1,3,7,9],[-2,-5,-7,-10,1,4,6,9],[-3,-4,-7,-10,2,3,6,9],[-1,-2,-3,-10,0,1,2,9],[-4,-6,-8,-9,3,5,7,8],[-3,-5,-7,-9,2,4,6,8]];
+function decodeETC2AlphaBlock(bytes, off, px, bx, by, W, H){
+  const base=bytes[off], mult=(bytes[off+1]>>4)&15, tbl=bytes[off+1]&15;
+  let bits=0n;
+  for(let i=2;i<8;i++) bits=(bits<<8n)|BigInt(bytes[off+i]);
+  for(let i=0;i<16;i++){
+    const col=i>>2, row=i&3, ox=bx*4+col, oy=by*4+row;
+    if(ox>=W||oy>=H) continue;
+    const idx3=Number((bits>>BigInt((15-i)*3))&7n);
+    px[(oy*W+ox)*4+3]=clamp(base+mult*AT[tbl][idx3]);
+  }
+}
+
+let decodedCanvas=null, outName='texture';
+
+async function handleFile(file){
+  if(!file) return;
+  outName = file.name.replace(/\.pvr$/i,'');
+  decodedCanvas = null;
+  ['preview-wrap','meta-grid','export-bar'].forEach(id=>document.getElementById(id).classList.remove('visible'));
+  document.getElementById('progress-wrap').classList.remove('visible');
+  document.getElementById('progress-bar').style.width='0%';
+  initLog();
+
+  log(`loading "${file.name}" (${(file.size/1024).toFixed(1)} KB)`);
+  await tick();
+
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const view = new DataView(buf);
+
+  if(buf.byteLength < 52){ log('file too small','err'); return; }
+  const magic = view.getUint32(0,true);
+  if(magic !== 0x03525650){ log(`bad magic: 0x${magic.toString(16)} (expected 0x03525650)`,'err'); return; }
+  log('PVR3 magic OK'); await tick();
+
+  const pixFmtLo = view.getUint32(8,true);
+  const pixFmtHi = view.getUint32(12,true);
+  const height   = view.getUint32(24,true);
+  const width    = view.getUint32(28,true);
+  const mips     = view.getUint32(44,true);
+  const metaSize = view.getUint32(48,true);
+  const hdrEnd   = 52+metaSize;
+
+  const FMT={0:'PVRTC 2bpp RGB',1:'PVRTC 2bpp RGBA',2:'PVRTC 4bpp RGB',3:'PVRTC 4bpp RGBA',6:'ETC1',22:'ETC2 RGB',23:'ETC2 RGBA'};
+  const fmtName = pixFmtHi!==0 ? `custom(hi=0x${pixFmtHi.toString(16)})` : (FMT[pixFmtLo]||`unknown(${pixFmtLo})`);
+
+  log(`dimensions: ${width} × ${height}`);
+  log(`format: ${fmtName} (pixFmt=${pixFmtLo})`);
+  log(`mip levels: ${mips}, metadata: ${metaSize} bytes`);
+
+  document.getElementById('m-w').textContent=width;
+  document.getElementById('m-h').textContent=height;
+  document.getElementById('m-fmt').textContent=fmtName;
+  document.getElementById('m-size').textContent=(file.size/1024).toFixed(0)+' KB';
+  document.getElementById('meta-grid').classList.add('visible');
+  await tick();
+
+  if(pixFmtLo!==6 && pixFmtLo!==22 && pixFmtLo!==23){
+    log(`unsupported format — only ETC1, ETC2 RGB, ETC2 RGBA are supported`,'err'); return;
+  }
+
+  const texData = bytes.subarray(hdrEnd);
+  const bpb = pixFmtLo===23 ? 16 : 8;
+  const bw=Math.ceil(width/4), bh=Math.ceil(height/4), total=bw*bh;
+  const expected=total*bpb;
+
+  log(`texture data: ${texData.length} bytes`);
+  log(`blocks: ${bw}×${bh} = ${total} (${bpb} bytes/block = ${expected} expected)`);
+  if(texData.length < expected) log(`data shorter than expected — will decode what's available`,'warn');
+  else log('data size checks out ✓','ok');
+
+  log('starting decode…'); await tick();
+
+  const canvas=document.createElement('canvas');
+  canvas.width=width; canvas.height=height;
+  const ctx=canvas.getContext('2d');
+  const imgD=ctx.createImageData(width,height);
+  const px=imgD.data;
+
+  if(pixFmtLo!==23) for(let i=3;i<px.length;i+=4) px[i]=255;
+
+  // decode in chunks, yielding every chunk so the browser stays alive
+  const CHUNK=2000;
+  let lastPct=0;
+  for(let b=0;b<total;b+=CHUNK){
+    const end=Math.min(b+CHUNK,total);
+    for(let i=b;i<end;i++){
+      const bx=i%bw, by=Math.floor(i/bw);
+      const off=i*bpb;
+      if(off+bpb>texData.length) continue;
+      if(pixFmtLo===23){
+        decodeETC2AlphaBlock(texData,off,px,bx,by,width,height);
+        decodeETC1Block(texData,off+8,px,bx,by,width,height);
+      } else {
+        decodeETC1Block(texData,off,px,bx,by,width,height);
+      }
+    }
+    const pct=Math.round(end/total*100);
+    setProgress(pct);
+    if(pct!==lastPct){
+      lastPct=pct;
+      // update log line in place so it doesn't flood
+      const last=logPanel.lastChild;
+      if(last && last.querySelector('.msg').textContent.startsWith('decoding')){
+        last.querySelector('.msg').textContent=`decoding… ${pct}%`;
+      } else {
+        log(`decoding… ${pct}%`);
+      }
+    }
+    await tick(); // yield every chunk — this is the key fix
+  }
+
+  ctx.putImageData(imgD,0,0);
+  decodedCanvas=canvas;
+
+  log(`decode complete — ${width}×${height} ready`,'ok');
+  await tick();
+
+  document.getElementById('preview-img').src=canvas.toDataURL('image/png');
+  document.getElementById('preview-wrap').classList.add('visible');
+  document.getElementById('export-bar').classList.add('visible');
+}
+
+function fmtChanged(){
+  const isJpg=document.getElementById('fmt-sel').value==='jpg';
+  document.getElementById('ql-lbl').style.display=isJpg?'':'none';
+  document.getElementById('q-slider').style.display=isJpg?'':'none';
+  document.getElementById('q-val').style.display=isJpg?'':'none';
+}
+
+function saveImage(){
+  if(!decodedCanvas) return;
+  const fmt=document.getElementById('fmt-sel').value;
+  const q=parseInt(document.getElementById('q-slider').value)/100;
+  const mime=fmt==='jpg'?'image/jpeg':'image/png';
+  let url;
+  if(fmt==='jpg'){
+    const c2=document.createElement('canvas');
+    c2.width=decodedCanvas.width; c2.height=decodedCanvas.height;
+    const cx=c2.getContext('2d');
+    cx.fillStyle='#fff'; cx.fillRect(0,0,c2.width,c2.height);
+    cx.drawImage(decodedCanvas,0,0);
+    url=c2.toDataURL(mime,q);
+  } else {
+    url=decodedCanvas.toDataURL(mime);
+  }
+  const a=document.createElement('a');
+  a.href=url; a.download=`${outName}.${fmt}`; a.click();
+}
+</script>
+</body>
+</html>
